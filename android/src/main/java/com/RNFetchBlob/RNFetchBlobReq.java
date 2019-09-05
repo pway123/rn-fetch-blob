@@ -10,7 +10,6 @@ import android.net.Uri;
 import android.os.Build;
 import android.support.annotation.NonNull;
 import android.util.Base64;
-import android.util.Log;
 
 import com.RNFetchBlob.Response.RNFetchBlobDefaultResp;
 import com.RNFetchBlob.Response.RNFetchBlobFileResp;
@@ -199,8 +198,6 @@ public class RNFetchBlobReq extends BroadcastReceiver implements Runnable {
                 Context appCtx = RNFetchBlob.RCTContext.getApplicationContext();
                 DownloadManager dm = (DownloadManager) appCtx.getSystemService(Context.DOWNLOAD_SERVICE);
                 downloadManagerId = dm.enqueue(req);
-                
-                Log.d("RNFetchBlob", "enqueued to download manager with id " + downloadManagerId);
 
                 // Check if request already exists
                 DownloadManager.Query query = new DownloadManager.Query();
@@ -210,11 +207,17 @@ public class RNFetchBlobReq extends BroadcastReceiver implements Runnable {
                 if (c != null && c.moveToFirst()) {
                     int statusCode = c.getInt(c.getColumnIndex(DownloadManager.COLUMN_STATUS));
                     if (statusCode == DownloadManager.STATUS_SUCCESSFUL) {
-                        Log.d("RNFetchBlobReq", "The previous request has been cached");
-                        dm.remove(downloadManagerId);
-                        // Enqueue the new download request
-                        downloadManagerId = dm.enqueue(req);
-                        Log.d("RNFetchBlob", "enqueued to download manager with new id " + downloadManagerId);
+                        try {
+                            int numRemoved = dm.remove(downloadManagerId);
+                            if (numRemoved == 0) {
+                                throw new Exception("Failed to remove existing request");
+                            }
+                            // Enqueue the new download request
+                            downloadManagerId = dm.enqueue(req);
+                        } catch (Exception e) {
+                            this.callback.invoke(e.getLocalizedMessage(), null);
+                            return;
+                        }
                     }
                 }
 
