@@ -686,6 +686,8 @@ public class RNFetchBlobReq extends BroadcastReceiver implements Runnable {
         if (DownloadManager.ACTION_DOWNLOAD_COMPLETE.equals(action)) {
             Context appCtx = RNFetchBlob.RCTContext.getApplicationContext();
             long id = intent.getExtras().getLong(DownloadManager.EXTRA_DOWNLOAD_ID);
+
+            // handle downloads by download manager id
             if (id == this.downloadManagerId) {
                 releaseTaskResource(); // remove task ID from task map
 
@@ -695,8 +697,9 @@ public class RNFetchBlobReq extends BroadcastReceiver implements Runnable {
                 dm.query(query);
                 Cursor c = dm.query(query);
 
-
+                String contentUri = null;
                 String filePath = null;
+                
                 // the file exists in media content database
                 if (c.moveToFirst()) {
                     // #297 handle failed request
@@ -705,8 +708,11 @@ public class RNFetchBlobReq extends BroadcastReceiver implements Runnable {
                         this.callback.invoke("Download manager failed to download from  " + this.url + ". Status Code = " + statusCode, null, null);
                         return;
                     }
-                    String contentUri = c.getString(c.getColumnIndex(DownloadManager.COLUMN_LOCAL_URI));
-                    if ( contentUri != null &&
+
+                    // download manager will give us the actual (appended) file path / location
+                    contentUri = c.getString(c.getColumnIndex(DownloadManager.COLUMN_LOCAL_URI));
+
+                    if (contentUri != null &&
                             options.addAndroidDownloads.hasKey("mime") &&
                             options.addAndroidDownloads.getString("mime").contains("image")) {
                         Uri uri = Uri.parse(contentUri);
@@ -724,6 +730,14 @@ public class RNFetchBlobReq extends BroadcastReceiver implements Runnable {
                 if (options.addAndroidDownloads.hasKey("path")) {
                     try {
                         String customDest = options.addAndroidDownloads.getString("path");
+
+                        // if not overwriting, we always return the path provided by download manager as the authoritative uri to access the file
+                        if (options.addAndroidDownloads.hasKey("overwrite") 
+                        && !options.addAndroidDownloads.getBoolean("overwrite") 
+                        && contentUri != null) {
+                            customDest = contentUri.replace("file://", "");
+                        }
+
                         boolean exists = new File(customDest).exists();
                         if(!exists)
                             throw new Exception("Download manager download failed, the file does not downloaded to destination.");
@@ -735,6 +749,9 @@ public class RNFetchBlobReq extends BroadcastReceiver implements Runnable {
                         this.callback.invoke(ex.getLocalizedMessage(), null);
                     }
                 }
+
+                // only handle callback successfully if is an image (with valid file path)
+                // any other file types without user-specified path will not work
                 else {
                     if(filePath == null)
                         this.callback.invoke("Download manager could not resolve downloaded file path.", RNFetchBlobConst.RNFB_RESPONSE_PATH, null);
