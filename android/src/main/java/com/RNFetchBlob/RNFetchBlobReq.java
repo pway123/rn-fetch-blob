@@ -10,6 +10,7 @@ import android.net.Uri;
 import android.os.Build;
 import android.support.annotation.NonNull;
 import android.util.Base64;
+import android.util.Log;
 
 import com.RNFetchBlob.Response.RNFetchBlobDefaultResp;
 import com.RNFetchBlob.Response.RNFetchBlobFileResp;
@@ -188,9 +189,35 @@ public class RNFetchBlobReq extends BroadcastReceiver implements Runnable {
                     String key = it.nextKey();
                     req.addRequestHeader(key, headers.getString(key));
                 }
+
+                // On some devices, redownloading a file from the same url returns the same download id.
+                // onReceive never fires, and the promise never resolves.
+
+                // Workaround: delete the existing entry using the download id.
+                // The new download will have a running count. On some models, the existing file is deleted.
+
                 Context appCtx = RNFetchBlob.RCTContext.getApplicationContext();
                 DownloadManager dm = (DownloadManager) appCtx.getSystemService(Context.DOWNLOAD_SERVICE);
                 downloadManagerId = dm.enqueue(req);
+                
+                Log.d("RNFetchBlob", "enqueued to download manager with id " + downloadManagerId);
+
+                // Check if request already exists
+                DownloadManager.Query query = new DownloadManager.Query();
+                query.setFilterById(downloadManagerId);
+                Cursor c = dm.query(query);
+
+                if (c != null && c.moveToFirst()) {
+                    int statusCode = c.getInt(c.getColumnIndex(DownloadManager.COLUMN_STATUS));
+                    if (statusCode == DownloadManager.STATUS_SUCCESSFUL) {
+                        Log.d("RNFetchBlobReq", "The previous request has been cached");
+                        dm.remove(downloadManagerId);
+                        // Enqueue the new download request
+                        downloadManagerId = dm.enqueue(req);
+                        Log.d("RNFetchBlob", "enqueued to download manager with new id " + downloadManagerId);
+                    }
+                }
+
                 androidDownloadManagerTaskTable.put(taskId, Long.valueOf(downloadManagerId));
                 appCtx.registerReceiver(this, new IntentFilter(DownloadManager.ACTION_DOWNLOAD_COMPLETE));
                 return;
