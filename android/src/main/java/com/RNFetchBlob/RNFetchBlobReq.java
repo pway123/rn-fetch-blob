@@ -742,6 +742,8 @@ public class RNFetchBlobReq extends BroadcastReceiver implements Runnable {
                         this.callback.invoke(null, RNFetchBlobConst.RNFB_RESPONSE_PATH, filePath);
                 }
 
+                // Unregister listener after callback is resolved to avoid single callback invocation error
+                appCtx.unregisterReceiver(this);
             }
         }
     }
