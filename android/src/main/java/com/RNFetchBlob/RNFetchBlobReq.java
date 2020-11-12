@@ -8,7 +8,11 @@ import android.content.IntentFilter;
 import android.database.Cursor;
 import android.net.Uri;
 import android.os.Build;
-import android.support.annotation.NonNull;
+import androidx.annotation.NonNull;
+import android.net.Network;
+import android.net.NetworkInfo;
+import android.net.NetworkCapabilities;
+import android.net.ConnectivityManager;
 import android.util.Base64;
 
 import com.RNFetchBlob.Response.RNFetchBlobDefaultResp;
@@ -16,7 +20,6 @@ import com.RNFetchBlob.Response.RNFetchBlobFileResp;
 import com.facebook.common.logging.FLog;
 import com.facebook.react.bridge.Arguments;
 import com.facebook.react.bridge.Callback;
-import com.facebook.react.bridge.ReactApplicationContext;
 import com.facebook.react.bridge.ReadableArray;
 import com.facebook.react.bridge.ReadableMap;
 import com.facebook.react.bridge.ReadableMapKeySetIterator;
@@ -37,6 +40,7 @@ import java.net.MalformedURLException;
 import java.net.SocketException;
 import java.net.SocketTimeoutException;
 import java.net.URL;
+import java.net.Proxy;
 import java.nio.ByteBuffer;
 import java.nio.charset.CharacterCodingException;
 import java.nio.charset.Charset;
@@ -161,7 +165,7 @@ public class RNFetchBlobReq extends BroadcastReceiver implements Runnable {
             if (options.addAndroidDownloads.getBoolean("useDownloadManager")) {
                 Uri uri = Uri.parse(url);
                 DownloadManager.Request req = new DownloadManager.Request(uri);
-                if(options.addAndroidDownloads.getBoolean("notification")) {
+                if(options.addAndroidDownloads.hasKey("notification") && options.addAndroidDownloads.getBoolean("notification")) {
                     req.setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED);
                 } else {
                     req.setNotificationVisibility(DownloadManager.Request.VISIBILITY_HIDDEN);
@@ -260,6 +264,49 @@ public class RNFetchBlobReq extends BroadcastReceiver implements Runnable {
                 clientBuilder = RNFetchBlobUtils.getUnsafeOkHttpClient(client);
             } else {
                 clientBuilder = client.newBuilder();
+            }
+
+            // wifi only, need ACCESS_NETWORK_STATE permission
+            // and API level >= 21
+            if(this.options.wifiOnly){
+
+                boolean found = false;
+
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+                    ConnectivityManager connectivityManager = (ConnectivityManager) RNFetchBlob.RCTContext.getSystemService(RNFetchBlob.RCTContext.CONNECTIVITY_SERVICE);
+                    Network[] networks = connectivityManager.getAllNetworks();
+
+                    for (Network network : networks) {
+
+                        NetworkInfo netInfo = connectivityManager.getNetworkInfo(network);
+                        NetworkCapabilities caps = connectivityManager.getNetworkCapabilities(network);
+
+                        if(caps == null || netInfo == null){
+                            continue;
+                        }
+
+                        if(!netInfo.isConnected()){
+                            continue;
+                        }
+
+                        if(caps.hasTransport(NetworkCapabilities.TRANSPORT_WIFI)){
+                            clientBuilder.proxy(Proxy.NO_PROXY);
+                            clientBuilder.socketFactory(network.getSocketFactory());
+                            found = true;
+                            break;
+
+                        }
+                    }
+
+                    if(!found){
+                        callback.invoke("No available WiFi connections.", null, null);
+                        releaseTaskResource();
+                        return;
+                    }
+                }
+                else{
+                    RNFetchBlobUtils.emitWarningEvent("RNFetchBlob: wifiOnly was set, but SDK < 21. wifiOnly was ignored.");
+                }
             }
 
             final Request.Builder builder = new Request.Builder();
@@ -409,7 +456,7 @@ public class RNFetchBlobReq extends BroadcastReceiver implements Runnable {
                     }
                     catch (SocketTimeoutException e ){
                         timeout = true;
-                        RNFetchBlobUtils.emitWarningEvent("RNFetchBlob error when sending request : " + e.getLocalizedMessage());
+                        //RNFetchBlobUtils.emitWarningEvent("RNFetchBlob error when sending request : " + e.getLocalizedMessage());
                     } catch(Exception ex) {
 
                     }
@@ -445,7 +492,7 @@ public class RNFetchBlobReq extends BroadcastReceiver implements Runnable {
                     // check if this error caused by socket timeout
                     if(e.getClass().equals(SocketTimeoutException.class)) {
                         respInfo.putBoolean("timeout", true);
-                        callback.invoke("request timed out.", null, null);
+                        callback.invoke("The request timed out.", null, null);
                     }
                     else
                         callback.invoke(e.getLocalizedMessage(), null, null);
@@ -545,11 +592,13 @@ public class RNFetchBlobReq extends BroadcastReceiver implements Runnable {
                             String utf8 = new String(b);
                             callback.invoke(null, RNFetchBlobConst.RNFB_RESPONSE_UTF8, utf8);
                         }
-                        // This usually mean the data is contains invalid unicode characters, it's
-                        // binary data
+                        // This usually mean the data is contains invalid unicode characters but still valid data,
+                        // it's binary data, so send it as a normal string
                         catch(CharacterCodingException ignored) {
+                            
                             if(responseFormat == ResponseFormat.UTF8) {
-                                callback.invoke(null, RNFetchBlobConst.RNFB_RESPONSE_UTF8, "");
+                                String utf8 = new String(b);
+                                callback.invoke(null, RNFetchBlobConst.RNFB_RESPONSE_UTF8, utf8);
                             }
                             else {
                                 callback.invoke(null, RNFetchBlobConst.RNFB_RESPONSE_BASE64, android.util.Base64.encodeToString(b, Base64.NO_WRAP));
@@ -561,16 +610,27 @@ public class RNFetchBlobReq extends BroadcastReceiver implements Runnable {
                 }
                 break;
             case FileStorage:
+                ResponseBody responseBody = resp.body();
+
                 try {
                     // In order to write response data to `destPath` we have to invoke this method.
                     // It uses customized response body which is able to report download progress
                     // and write response data to destination path.
-                    resp.body().bytes();
+                    responseBody.bytes();
                 } catch (Exception ignored) {
 //                    ignored.printStackTrace();
                 }
-                this.destPath = this.destPath.replace("?append=true", "");
-                callback.invoke(null, RNFetchBlobConst.RNFB_RESPONSE_PATH, this.destPath);
+
+                RNFetchBlobFileResp rnFetchBlobFileResp = (RNFetchBlobFileResp) responseBody;
+
+                if(rnFetchBlobFileResp != null && !rnFetchBlobFileResp.isDownloadComplete()){
+                    callback.invoke("Download interrupted.", null);
+                }
+                else {
+                    this.destPath = this.destPath.replace("?append=true", "");
+                    callback.invoke(null, RNFetchBlobConst.RNFB_RESPONSE_PATH, this.destPath);
+                }
+
                 break;
             default:
                 try {
