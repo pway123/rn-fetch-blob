@@ -805,7 +805,7 @@ public class RNFetchBlobReq extends BroadcastReceiver implements Runnable {
                         if (options.addAndroidDownloads.hasKey("overwrite") 
                         && !options.addAndroidDownloads.getBoolean("overwrite") 
                         && contentUri != null) {
-                            customDest = contentUri.replace("file://", "");
+                            customDest = Uri.parse(contentUri).getPath();
                         }
 
                         boolean exists = new File(customDest).exists();
