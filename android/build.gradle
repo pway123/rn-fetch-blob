@@ -43,4 +43,6 @@ dependencies {
     implementation "com.facebook.react:react-native:${safeExtGet('reactNativeVersion', '+')}"
     //compile 'com.squareup.okhttp3:okhttp:+'
     //{RNFetchBlob_PRE_0.28_DEPDENDENCY}
+    implementation group: 'commons-io', name: 'commons-io', version: '2.6'
+    implementation 'org.apache.commons:commons-lang3:3.6'
 }

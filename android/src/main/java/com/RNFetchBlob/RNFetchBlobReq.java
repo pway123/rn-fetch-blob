@@ -68,6 +68,9 @@ import okhttp3.Response;
 import okhttp3.ResponseBody;
 import okhttp3.TlsVersion;
 
+import org.apache.commons.io.FilenameUtils;
+import org.apache.commons.lang3.StringUtils;
+
 
 public class RNFetchBlobReq extends BroadcastReceiver implements Runnable {
 
@@ -177,7 +180,20 @@ public class RNFetchBlobReq extends BroadcastReceiver implements Runnable {
                     req.setDescription(options.addAndroidDownloads.getString("description"));
                 }
                 if(options.addAndroidDownloads.hasKey("path")) {
-                    req.setDestinationUri(Uri.parse("file://" + options.addAndroidDownloads.getString("path")));
+                    String path = options.addAndroidDownloads.getString("path");
+
+                    /* samsung download manager renames base filenames longer than 124 characters to "downloadfile".
+                    To workaround this behaviour, abbreviate base filename to 124 characters. */
+                    if(android.os.Build.MANUFACTURER.equalsIgnoreCase("samsung")) {
+                        String baseFilename = FilenameUtils.getBaseName(path);
+                        String fileExtension =  FilenameUtils.getExtension(path);
+                        // abbreviateMiddle to 124 characters for base filename
+                        String upTo124CharName = StringUtils.abbreviateMiddle(baseFilename, "...", 124);
+                        File renamedFile = new File(new File(path).getParentFile(), upTo124CharName + '.' + fileExtension);
+                        path = renamedFile.getAbsolutePath();
+                    }
+
+                    req.setDestinationUri(Uri.fromFile(new File(path)));
                 }
                 // #391 Add MIME type to the request
                 if(options.addAndroidDownloads.hasKey("mime")) {
@@ -806,6 +822,13 @@ public class RNFetchBlobReq extends BroadcastReceiver implements Runnable {
                         && !options.addAndroidDownloads.getBoolean("overwrite") 
                         && contentUri != null) {
                             customDest = Uri.parse(contentUri).getPath();
+
+                             // handling for download manager in samsung devices where long filename gets renamed to downloadfile
+                            if(targetFilename != downloadedFilename && downloadedFilename.contains("downloadfile")) {
+                                // download manager in samsung device has renamed the file to downloadfile / download-*
+                                String newFilename = downloadedFilename.replace("downloadfile", targetFilename);
+                                downloadedFile.renameTo()
+                            }
                         }
 
                         boolean exists = new File(customDest).exists();
