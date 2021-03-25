@@ -822,13 +822,6 @@ public class RNFetchBlobReq extends BroadcastReceiver implements Runnable {
                         && !options.addAndroidDownloads.getBoolean("overwrite") 
                         && contentUri != null) {
                             customDest = Uri.parse(contentUri).getPath();
-
-                             // handling for download manager in samsung devices where long filename gets renamed to downloadfile
-                            if(targetFilename != downloadedFilename && downloadedFilename.contains("downloadfile")) {
-                                // download manager in samsung device has renamed the file to downloadfile / download-*
-                                String newFilename = downloadedFilename.replace("downloadfile", targetFilename);
-                                downloadedFile.renameTo()
-                            }
                         }
 
                         boolean exists = new File(customDest).exists();
