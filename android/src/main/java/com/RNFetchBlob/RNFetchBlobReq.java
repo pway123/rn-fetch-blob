@@ -183,7 +183,6 @@ public class RNFetchBlobReq extends BroadcastReceiver implements Runnable {
                 }
                 if (options.addAndroidDownloads.hasKey("path")) {
                     String path = options.addAndroidDownloads.getString("path");
-                    Log.d("RNFetchBlogReq path", path);
 
                     String baseFilename = FilenameUtils.getBaseName(path);
                     String fileExtension = FilenameUtils.getExtension(path);
