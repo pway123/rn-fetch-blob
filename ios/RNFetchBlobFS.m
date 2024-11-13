@@ -575,10 +575,9 @@ NSMutableDictionary *fileStreams = nil;
 
     NSData *content = [[NSFileManager defaultManager] contentsAtPath:path];
 
-    NSArray *keys = [NSArray arrayWithObjects:@"md5", @"sha1", @"sha224", @"sha256", @"sha384", @"sha512", nil];
+    NSArray *keys = [NSArray arrayWithObjects:@"sha1", @"sha224", @"sha256", @"sha384", @"sha512", nil];
 
     NSArray *digestLengths = [NSArray arrayWithObjects:
-        @CC_MD5_DIGEST_LENGTH,
         @CC_SHA1_DIGEST_LENGTH,
         @CC_SHA224_DIGEST_LENGTH,
         @CC_SHA256_DIGEST_LENGTH,
@@ -591,14 +590,12 @@ NSMutableDictionary *fileStreams = nil;
     int digestLength = [[keysToDigestLengths objectForKey:algorithm] intValue];
 
     if (!digestLength) {
-      return reject(@"EINVAL", [NSString stringWithFormat:@"Invalid algorithm '%@', must be one of md5, sha1, sha224, sha256, sha384, sha512", algorithm], nil);
+      return reject(@"EINVAL", [NSString stringWithFormat:@"Invalid algorithm '%@', must be one of sha1, sha224, sha256, sha384, sha512", algorithm], nil);
     }
 
     unsigned char buffer[digestLength];
 
-    if ([algorithm isEqualToString:@"md5"]) {
-        CC_MD5(content.bytes, (CC_LONG)content.length, buffer);
-    } else if ([algorithm isEqualToString:@"sha1"]) {
+    if ([algorithm isEqualToString:@"sha1"]) {
         CC_SHA1(content.bytes, (CC_LONG)content.length, buffer);
     } else if ([algorithm isEqualToString:@"sha224"]) {
         CC_SHA224(content.bytes, (CC_LONG)content.length, buffer);
@@ -609,7 +606,7 @@ NSMutableDictionary *fileStreams = nil;
     } else if ([algorithm isEqualToString:@"sha512"]) {
         CC_SHA512(content.bytes, (CC_LONG)content.length, buffer);
     } else {
-        reject(@"EINVAL", [NSString stringWithFormat:@"Invalid algorithm '%@', must be one of md5, sha1, sha224, sha256, sha384, sha512", algorithm], nil);
+        reject(@"EINVAL", [NSString stringWithFormat:@"Invalid algorithm '%@', must be one of sha1, sha224, sha256, sha384, sha512", algorithm], nil);
         return;
     }
 
