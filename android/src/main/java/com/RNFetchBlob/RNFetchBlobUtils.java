@@ -19,11 +19,11 @@ import okhttp3.OkHttpClient;
 
 public class RNFetchBlobUtils {
 
-    public static String getMD5(String input) {
+    public static String getSHA256(String input) {
         String result = null;
 
         try {
-            MessageDigest md = MessageDigest.getInstance("MD5");
+            MessageDigest md = MessageDigest.getInstance("SHA-256");
             md.update(input.getBytes());
             byte[] digest = md.digest();
 

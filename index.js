@@ -98,7 +98,7 @@ function wrap(path:string):string {
  *                   will be saved to specific file path. Default string format
  *                   is : `RNFetchBlob-file://path-to-file`
  *         @property {string} key
- *                   If this property is set, it will be converted to md5, to
+ *                   If this property is set, it will be converted to sha256, to
  *                   check if a file with this name exists.
  *                   If it exists, the absolute path is returned (no network
  *                   activity takes place )
